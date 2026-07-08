@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use crate::bundle::store::{BundleStore, StoreError, StoreResult};
 use crate::bundle::path_safety::PathChecker;
+use crate::bundle::store::{BundleStore, StoreError, StoreResult};
 
 pub struct LocalFsStore {
     root: PathBuf,
@@ -53,7 +53,10 @@ impl BundleStore for LocalFsStore {
         // Filter by prefix string
         let files = if let Some(pref) = prefix {
             let pref_norm = pref.trim_end_matches('/');
-            files.into_iter().filter(|f| f.starts_with(pref_norm)).collect()
+            files
+                .into_iter()
+                .filter(|f| f.starts_with(pref_norm))
+                .collect()
         } else {
             files
         };

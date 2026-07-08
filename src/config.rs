@@ -58,6 +58,7 @@ pub struct ResolvedBundleConfig {
     pub default_branch: Option<String>,
     pub branch_policy: Option<String>,
     pub auth: Option<AuthConfig>,
+    pub write_allowlist: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

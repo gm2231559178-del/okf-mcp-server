@@ -13,8 +13,7 @@ use crate::server::OkfServer;
 async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info")),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .init();
 
@@ -80,6 +79,7 @@ async fn main() {
                 ssh_key: a.ssh_key,
                 token_env: a.token_env,
             }),
+            write_allowlist: bc.write_allowlist,
         })
         .collect();
 
@@ -90,8 +90,8 @@ async fn main() {
         std::process::exit(1);
     }
 
-    let server = OkfServer::new(resolved_bundles, config.audit_dir.as_deref())
-        .unwrap_or_else(|e| {
+    let server =
+        OkfServer::new(resolved_bundles, config.audit_dir.as_deref()).unwrap_or_else(|e| {
             tracing::error!("Failed to create server: {e}");
             std::process::exit(1);
         });

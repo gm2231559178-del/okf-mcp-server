@@ -5,8 +5,16 @@ pub enum PathSafetyError {
     ContainsDotDot(String),
     AbsolutePath(String),
     NullByte(String),
-    ResolvesOutsideRoot { input: String, resolved: String, root: String },
-    SymlinkOutsideRoot { input: String, target: String, root: String },
+    ResolvesOutsideRoot {
+        input: String,
+        resolved: String,
+        root: String,
+    },
+    SymlinkOutsideRoot {
+        input: String,
+        target: String,
+        root: String,
+    },
 }
 
 impl std::fmt::Display for PathSafetyError {
@@ -15,11 +23,25 @@ impl std::fmt::Display for PathSafetyError {
             PathSafetyError::ContainsDotDot(p) => write!(f, "path contains '..' segment: {p}"),
             PathSafetyError::AbsolutePath(p) => write!(f, "path is absolute: {p}"),
             PathSafetyError::NullByte(p) => write!(f, "path contains null byte: {p}"),
-            PathSafetyError::ResolvesOutsideRoot { input, resolved, root } => {
-                write!(f, "path '{input}' resolves to '{resolved}' which is outside bundle root '{root}'")
+            PathSafetyError::ResolvesOutsideRoot {
+                input,
+                resolved,
+                root,
+            } => {
+                write!(
+                    f,
+                    "path '{input}' resolves to '{resolved}' which is outside bundle root '{root}'"
+                )
             }
-            PathSafetyError::SymlinkOutsideRoot { input, target, root } => {
-                write!(f, "symlink '{input}' points to '{target}' which is outside bundle root '{root}'")
+            PathSafetyError::SymlinkOutsideRoot {
+                input,
+                target,
+                root,
+            } => {
+                write!(
+                    f,
+                    "symlink '{input}' points to '{target}' which is outside bundle root '{root}'"
+                )
             }
         }
     }
@@ -75,8 +97,7 @@ impl PathChecker {
         }
 
         if canonical.is_symlink() {
-            let target = std::fs::read_link(&canonical)
-                .unwrap_or(canonical.clone());
+            let target = std::fs::read_link(&canonical).unwrap_or(canonical.clone());
             let target_canonical = if target.is_absolute() {
                 target
             } else if let Some(parent) = canonical.parent() {
@@ -111,11 +132,15 @@ impl PathChecker {
     /// Ensure an input concept_id is safe and not reserved.
     pub fn check_concept_id(id: &str) -> Result<String, PathSafetyError> {
         let safe = Self::check(id)?;
-        let path = if safe.ends_with(".md") { safe.clone() } else { format!("{}.md", safe) };
+        let path = if safe.ends_with(".md") {
+            safe.clone()
+        } else {
+            format!("{}.md", safe)
+        };
         if Self::is_reserved_filename(&path) {
-            return Err(PathSafetyError::ContainsDotDot(
-                format!("concept ID uses reserved filename: {id}")
-            ));
+            return Err(PathSafetyError::ContainsDotDot(format!(
+                "concept ID uses reserved filename: {id}"
+            )));
         }
         Ok(safe)
     }

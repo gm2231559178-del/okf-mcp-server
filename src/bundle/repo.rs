@@ -31,11 +31,22 @@ impl BundleRepo {
 
     // --- Listing ---
 
-    pub fn list_concepts(&self, prefix: Option<&str>, type_filter: Option<&str>, tag_filter: Option<&str>) -> StoreResult<Vec<ConceptId>> {
-        let prefix = prefix.map(|p| {
-            let clean = p.trim_start_matches('/').trim_end_matches('/');
-            if clean.is_empty() { None } else { Some(clean.to_string()) }
-        }).flatten();
+    pub fn list_concepts(
+        &self,
+        prefix: Option<&str>,
+        type_filter: Option<&str>,
+        tag_filter: Option<&str>,
+    ) -> StoreResult<Vec<ConceptId>> {
+        let prefix = prefix
+            .map(|p| {
+                let clean = p.trim_start_matches('/').trim_end_matches('/');
+                if clean.is_empty() {
+                    None
+                } else {
+                    Some(clean.to_string())
+                }
+            })
+            .flatten();
 
         let all_files = self.store.list_files(prefix.as_deref())?;
         let mut concepts = Vec::new();
@@ -46,7 +57,9 @@ impl BundleRepo {
             }
 
             if let Some(t) = type_filter {
-                match self.read_concept_frontmatter_only(&ConceptId::new(file.trim_end_matches(".md"))) {
+                match self
+                    .read_concept_frontmatter_only(&ConceptId::new(file.trim_end_matches(".md")))
+                {
                     Ok(fm) => {
                         if fm.r#type != t {
                             continue;
@@ -57,9 +70,14 @@ impl BundleRepo {
             }
 
             if let Some(tag) = tag_filter {
-                match self.read_concept_frontmatter_only(&ConceptId::new(file.trim_end_matches(".md"))) {
+                match self
+                    .read_concept_frontmatter_only(&ConceptId::new(file.trim_end_matches(".md")))
+                {
                     Ok(fm) => {
-                        let has_tag = fm.tags.as_ref().map_or(false, |tgs| tgs.iter().any(|t| t == tag));
+                        let has_tag = fm
+                            .tags
+                            .as_ref()
+                            .map_or(false, |tgs| tgs.iter().any(|t| t == tag));
                         if !has_tag {
                             continue;
                         }
@@ -124,7 +142,9 @@ impl BundleRepo {
 
         // Validate required frontmatter
         if concept.frontmatter.r#type.trim().is_empty() {
-            return Err(StoreError::Other("frontmatter type is required and must be non-empty".to_string()));
+            return Err(StoreError::Other(
+                "frontmatter type is required and must be non-empty".to_string(),
+            ));
         }
 
         let content = serialize_concept(&concept.frontmatter, &concept.body);
@@ -166,7 +186,10 @@ impl BundleRepo {
                 }
             };
             let okf_version = if dir_path.is_empty() || dir_path == "/" {
-                fm.extra.get("okf_version").and_then(|v| v.as_str()).map(|s| s.to_string())
+                fm.extra
+                    .get("okf_version")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
             } else {
                 None
             };
@@ -192,7 +215,10 @@ impl BundleRepo {
         let prefix = if dir_path.is_empty() || dir_path == "/" {
             None
         } else {
-            Some(format!("{}/", dir_path.trim_start_matches('/').trim_end_matches('/')))
+            Some(format!(
+                "{}/",
+                dir_path.trim_start_matches('/').trim_end_matches('/')
+            ))
         };
 
         let files = self.store.list_files(prefix.as_deref())?;
@@ -212,7 +238,8 @@ impl BundleRepo {
 
             if let Some(slash_pos) = rel.find('/') {
                 let subdir = &rel[..slash_pos];
-                let subdir_prefix = prefix.as_ref()
+                let subdir_prefix = prefix
+                    .as_ref()
                     .map(|p| format!("{}{}", p, subdir))
                     .unwrap_or_else(|| subdir.to_string());
                 if file.trim_end_matches(".md") != subdir_prefix {
@@ -221,9 +248,13 @@ impl BundleRepo {
                 }
             }
 
-            match self.read_concept_frontmatter_only(&ConceptId::new(file.trim_end_matches(".md"))) {
+            match self.read_concept_frontmatter_only(&ConceptId::new(file.trim_end_matches(".md")))
+            {
                 Ok(fm) => {
-                    let title = fm.title.clone().unwrap_or_else(|| file.trim_end_matches(".md").to_string());
+                    let title = fm
+                        .title
+                        .clone()
+                        .unwrap_or_else(|| file.trim_end_matches(".md").to_string());
                     concepts.push(IndexEntry {
                         title,
                         path: format!("/{file}"),
@@ -250,14 +281,20 @@ impl BundleRepo {
         }
 
         if !subdirs.is_empty() {
-            let entries: Vec<IndexEntry> = subdirs.into_iter().map(|d| {
-                let dir_path = prefix.as_ref().map(|p| format!("{}{}", p, d)).unwrap_or_else(|| d.clone());
-                IndexEntry {
-                    title: d.clone(),
-                    path: format!("/{dir_path}/"),
-                    description: None,
-                }
-            }).collect();
+            let entries: Vec<IndexEntry> = subdirs
+                .into_iter()
+                .map(|d| {
+                    let dir_path = prefix
+                        .as_ref()
+                        .map(|p| format!("{}{}", p, d))
+                        .unwrap_or_else(|| d.clone());
+                    IndexEntry {
+                        title: d.clone(),
+                        path: format!("/{dir_path}/"),
+                        description: None,
+                    }
+                })
+                .collect();
             sections.push(IndexSection {
                 heading: "Subdirectories".to_string(),
                 entries,
@@ -279,7 +316,9 @@ impl BundleRepo {
         };
 
         if data.okf_version.is_some() && !is_root {
-            return Err(StoreError::Other("okf_version can only be set on root index.md".to_string()));
+            return Err(StoreError::Other(
+                "okf_version can only be set on root index.md".to_string(),
+            ));
         }
 
         let rendered = render_index(&data.sections, data.okf_version);
@@ -289,7 +328,12 @@ impl BundleRepo {
 
     // --- Log ---
 
-    pub fn append_log(&self, dir_path: &str, date: &str, entries: &[LogEntry]) -> StoreResult<String> {
+    pub fn append_log(
+        &self,
+        dir_path: &str,
+        date: &str,
+        entries: &[LogEntry],
+    ) -> StoreResult<String> {
         let _guard = self.write_mutex.lock().unwrap();
 
         let log_path = if dir_path.is_empty() || dir_path == "/" {
@@ -340,8 +384,10 @@ impl BundleRepo {
                 continue;
             }
 
-            let is_reserved = file == "index.md" || file.ends_with("/index.md")
-                || file == "log.md" || file.ends_with("/log.md");
+            let is_reserved = file == "index.md"
+                || file.ends_with("/index.md")
+                || file == "log.md"
+                || file.ends_with("/log.md");
 
             if is_reserved {
                 // Check reserved files follow structure
@@ -350,7 +396,9 @@ impl BundleRepo {
                         if let Ok((fm, _)) = parse_frontmatter(&content) {
                             // Reserved files at non-root level should have no type
                             if file != "index.md" && fm.extra.contains_key("okf_version") {
-                                errors.push(format!("okf_version present in non-root index.md: {file}"));
+                                errors.push(format!(
+                                    "okf_version present in non-root index.md: {file}"
+                                ));
                             }
                         }
                     }
@@ -373,7 +421,9 @@ impl BundleRepo {
             let (fm, _) = match parse_frontmatter(&content) {
                 Ok(v) => v,
                 Err(e) => {
-                    errors.push(format!("missing or unparseable YAML frontmatter in {file}: {e}"));
+                    errors.push(format!(
+                        "missing or unparseable YAML frontmatter in {file}: {e}"
+                    ));
                     continue;
                 }
             };
@@ -408,7 +458,11 @@ impl BundleRepo {
                 format!("{dir}/index.md")
             };
             if !self.store.exists(&index_path) {
-                let display = if dir.is_empty() { "root (/) / ." } else { dir.as_str() };
+                let display = if dir.is_empty() {
+                    "root (/) / ."
+                } else {
+                    dir.as_str()
+                };
                 warnings.push(format!("missing index.md in directory: {display}"));
             }
         }
@@ -475,7 +529,12 @@ impl BundleRepo {
 
     // --- Search ---
 
-    pub fn search(&self, query: &str, type_filter: Option<&str>, tag_filter: Option<&str>) -> StoreResult<Vec<SearchResult>> {
+    pub fn search(
+        &self,
+        query: &str,
+        type_filter: Option<&str>,
+        tag_filter: Option<&str>,
+    ) -> StoreResult<Vec<SearchResult>> {
         let all_concepts = self.list_concepts(None, type_filter, tag_filter)?;
         let query_lower = query.to_lowercase();
         let mut results = Vec::new();
@@ -485,7 +544,12 @@ impl BundleRepo {
                 Ok(concept) => {
                     let title = concept.frontmatter.title.clone().unwrap_or_default();
                     let description = concept.frontmatter.description.clone().unwrap_or_default();
-                    let tags = concept.frontmatter.tags.clone().unwrap_or_default().join(" ");
+                    let tags = concept
+                        .frontmatter
+                        .tags
+                        .clone()
+                        .unwrap_or_default()
+                        .join(" ");
                     let searchable = format!(
                         "{} {} {} {} {}",
                         id.as_str(),
@@ -497,11 +561,17 @@ impl BundleRepo {
                     let search_lower = searchable.to_lowercase();
 
                     if let Some(pos) = search_lower.find(&query_lower) {
-                        let score = compute_relevance_score(&query_lower, &searchable, &title, &description);
+                        let score = compute_relevance_score(
+                            &query_lower,
+                            &searchable,
+                            &title,
+                            &description,
+                        );
                         let snippet = extract_snippet(&searchable, pos, 200);
 
                         // Skip body-only matches for metadata-only mode
-                        let metadata_text = format!("{} {} {} {}", id.as_str(), title, description, tags);
+                        let metadata_text =
+                            format!("{} {} {} {}", id.as_str(), title, description, tags);
                         let metadata_lower = metadata_text.to_lowercase();
                         if !metadata_lower.contains(&query_lower) {
                             // body-only match — include for fulltext/auto
@@ -520,7 +590,11 @@ impl BundleRepo {
             }
         }
 
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results.truncate(50);
         Ok(results)
     }
@@ -570,19 +644,28 @@ fn parse_frontmatter(content: &str) -> Result<(Frontmatter, String), String> {
     }
 
     let content = &content[3..];
-    let end = content.find("\n---").ok_or_else(|| "closing frontmatter delimiter not found".to_string())?;
+    let end = content
+        .find("\n---")
+        .ok_or_else(|| "closing frontmatter delimiter not found".to_string())?;
 
     let yaml_str = &content[..end];
     let rest = content[end + 4..].trim_start().to_string();
 
-    let mut frontmatter: Frontmatter = serde_yaml::from_str(yaml_str)
-        .map_err(|e| format!("YAML parse error: {e}"))?;
+    let mut frontmatter: Frontmatter =
+        serde_yaml::from_str(yaml_str).map_err(|e| format!("YAML parse error: {e}"))?;
 
     // Re-parse unknown keys from raw YAML to preserve them verbatim in extra
-    let raw_mapping: serde_yaml::Mapping = serde_yaml::from_str(yaml_str)
-        .map_err(|e| format!("YAML parse error: {e}"))?;
+    let raw_mapping: serde_yaml::Mapping =
+        serde_yaml::from_str(yaml_str).map_err(|e| format!("YAML parse error: {e}"))?;
 
-    let known_keys = ["type", "title", "description", "resource", "tags", "timestamp"];
+    let known_keys = [
+        "type",
+        "title",
+        "description",
+        "resource",
+        "tags",
+        "timestamp",
+    ];
     for (key, value) in raw_mapping {
         let key_str = key.as_str().unwrap_or("").to_string();
         if !known_keys.contains(&key_str.as_str()) {
@@ -623,7 +706,10 @@ fn serialize_concept(frontmatter: &Frontmatter, body: &str) -> String {
     }
 
     if let Some(ref tags) = frontmatter.tags {
-        let tags_val: Vec<serde_yaml::Value> = tags.iter().map(|t| serde_yaml::Value::String(t.clone())).collect();
+        let tags_val: Vec<serde_yaml::Value> = tags
+            .iter()
+            .map(|t| serde_yaml::Value::String(t.clone()))
+            .collect();
         yaml_mapping.insert(
             serde_yaml::Value::String("tags".to_string()),
             serde_yaml::Value::Sequence(tags_val),
@@ -693,9 +779,10 @@ fn parse_index_body(body: &str) -> Option<Vec<IndexSection>> {
                 }
             }
             current_heading = Some(line[2..].trim().to_string());
-        } else if let Some(cap) = regex::Regex::new(r"^\s*\*\s*\[([^\]]*)\]\(([^)]+)\)(?:\s*-\s*(.*))?")
-            .unwrap()
-            .captures(line)
+        } else if let Some(cap) =
+            regex::Regex::new(r"^\s*\*\s*\[([^\]]*)\]\(([^)]+)\)(?:\s*-\s*(.*))?")
+                .unwrap()
+                .captures(line)
         {
             current_entries.push(IndexEntry {
                 title: cap[1].to_string(),
@@ -707,11 +794,18 @@ fn parse_index_body(body: &str) -> Option<Vec<IndexSection>> {
 
     if let Some(heading) = current_heading {
         if !current_entries.is_empty() {
-            sections.push(IndexSection { heading, entries: current_entries });
+            sections.push(IndexSection {
+                heading,
+                entries: current_entries,
+            });
         }
     }
 
-    if sections.is_empty() { None } else { Some(sections) }
+    if sections.is_empty() {
+        None
+    } else {
+        Some(sections)
+    }
 }
 
 fn render_index(sections: &[IndexSection], okf_version: Option<String>) -> String {
@@ -725,7 +819,11 @@ fn render_index(sections: &[IndexSection], okf_version: Option<String>) -> Strin
     for section in sections {
         output.push_str(&format!("# {}\n", section.heading));
         for entry in &section.entries {
-            let desc = entry.description.as_ref().map(|d| format!(" - {d}")).unwrap_or_default();
+            let desc = entry
+                .description
+                .as_ref()
+                .map(|d| format!(" - {d}"))
+                .unwrap_or_default();
             output.push_str(&format!("* [{}]({}){}\n", entry.title, entry.path, desc));
         }
         output.push('\n');

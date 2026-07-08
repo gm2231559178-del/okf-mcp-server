@@ -345,7 +345,9 @@ impl GitControl for GitStore {
             }
         };
 
-        let branch_short = branch_ref.strip_prefix("refs/heads/").unwrap_or(&branch_ref);
+        let branch_short = branch_ref
+            .strip_prefix("refs/heads/")
+            .unwrap_or(&branch_ref);
 
         let mut push_opts = PushOptions::new();
         let callbacks = self.callbacks();
@@ -365,12 +367,14 @@ impl GitControl for GitStore {
         let remote_name = remote.unwrap_or("origin");
         let repo = self.repo.lock().unwrap();
 
-        let branch_name = branch.map(|s| s.to_string()).or_else(|| {
-            repo.head()
-                .ok()
-                .and_then(|h| h.shorthand().map(|s| s.to_string()))
-        })
-        .unwrap_or_else(|| "main".to_string());
+        let branch_name = branch
+            .map(|s| s.to_string())
+            .or_else(|| {
+                repo.head()
+                    .ok()
+                    .and_then(|h| h.shorthand().map(|s| s.to_string()))
+            })
+            .unwrap_or_else(|| "main".to_string());
 
         let mut remote_obj = repo
             .find_remote(remote_name)
@@ -411,9 +415,9 @@ impl GitControl for GitStore {
                 }
                 if base_oid == local_commit.id() {
                     // Fast-forward
-                    let annotated = repo
-                        .find_annotated_commit(fetch_commit.id())
-                        .map_err(|e| StoreError::Other(format!("failed to annotate commit: {e}")))?;
+                    let annotated = repo.find_annotated_commit(fetch_commit.id()).map_err(|e| {
+                        StoreError::Other(format!("failed to annotate commit: {e}"))
+                    })?;
                     let analysis = repo
                         .merge_analysis(&[&annotated])
                         .map_err(|e| StoreError::Other(format!("merge analysis failed: {e}")))?;
@@ -426,17 +430,14 @@ impl GitControl for GitStore {
                     }
 
                     if analysis.0.is_fast_forward() {
-                        let fetch_tree = fetch_commit
-                            .tree()
-                            .map_err(|e| StoreError::Other(format!("failed to get fetch tree: {e}")))?;
+                        let fetch_tree = fetch_commit.tree().map_err(|e| {
+                            StoreError::Other(format!("failed to get fetch tree: {e}"))
+                        })?;
 
                         let mut checkout = git2::build::CheckoutBuilder::new();
                         checkout.force();
-                        repo.checkout_tree(
-                            fetch_tree.as_object(),
-                            Some(&mut checkout),
-                        )
-                        .map_err(|e| StoreError::Other(format!("checkout failed: {e}")))?;
+                        repo.checkout_tree(fetch_tree.as_object(), Some(&mut checkout))
+                            .map_err(|e| StoreError::Other(format!("checkout failed: {e}")))?;
 
                         local_ref
                             .set_target(fetch_commit.id(), "pull: fast-forward")
@@ -471,11 +472,8 @@ impl GitControl for GitStore {
 
                 let mut checkout = git2::build::CheckoutBuilder::new();
                 checkout.force();
-                repo.checkout_tree(
-                    fetch_tree.as_object(),
-                    Some(&mut checkout),
-                )
-                .map_err(|e| StoreError::Other(format!("checkout failed: {e}")))?;
+                repo.checkout_tree(fetch_tree.as_object(), Some(&mut checkout))
+                    .map_err(|e| StoreError::Other(format!("checkout failed: {e}")))?;
 
                 local_ref
                     .set_target(fetch_commit.id(), "pull: fast-forward")
@@ -493,17 +491,13 @@ impl GitControl for GitStore {
                 let annotated = repo
                     .find_annotated_commit(fetch_commit.id())
                     .map_err(|e| StoreError::Other(format!("failed to annotate commit: {e}")))?;
-                let merge_result = repo.merge(
-                    &[&annotated],
-                    None,
-                    None,
-                );
+                let merge_result = repo.merge(&[&annotated], None, None);
 
                 match merge_result {
                     Ok(()) => {
-                        let mut index = repo.index().map_err(|e| {
-                            StoreError::Other(format!("failed to get index: {e}"))
-                        })?;
+                        let mut index = repo
+                            .index()
+                            .map_err(|e| StoreError::Other(format!("failed to get index: {e}")))?;
 
                         if index.has_conflicts() {
                             let mut conflicts = Vec::new();
@@ -538,21 +532,20 @@ impl GitControl for GitStore {
                         let tree_oid = index
                             .write_tree()
                             .map_err(|e| StoreError::Other(format!("failed to write tree: {e}")))?;
-                        let tree = repo.find_tree(tree_oid).map_err(|e| {
-                            StoreError::Other(format!("failed to find tree: {e}"))
-                        })?;
+                        let tree = repo
+                            .find_tree(tree_oid)
+                            .map_err(|e| StoreError::Other(format!("failed to find tree: {e}")))?;
 
-                        let local_commit_obj = repo.find_commit(local_commit.id()).map_err(|e| {
-                            StoreError::Other(format!("failed to find local commit: {e}"))
-                        })?;
+                        let local_commit_obj =
+                            repo.find_commit(local_commit.id()).map_err(|e| {
+                                StoreError::Other(format!("failed to find local commit: {e}"))
+                            })?;
 
                         repo.commit(
                             Some("HEAD"),
                             &sig,
                             &sig,
-                            &format!(
-                                "Merge remote-tracking branch '{remote_name}/{branch_name}'"
-                            ),
+                            &format!("Merge remote-tracking branch '{remote_name}/{branch_name}'"),
                             &tree,
                             &[&local_commit_obj, &fetch_commit],
                         )
@@ -575,8 +568,12 @@ impl GitControl for GitStore {
                                     let mut paths = Vec::new();
                                     for r in iter {
                                         if let Ok(c) = r {
-                                            if let Some(e) = c.ancestor.or_else(|| c.our).or_else(|| c.their) {
-                                                paths.push(String::from_utf8_lossy(&e.path).to_string());
+                                            if let Some(e) =
+                                                c.ancestor.or_else(|| c.our).or_else(|| c.their)
+                                            {
+                                                paths.push(
+                                                    String::from_utf8_lossy(&e.path).to_string(),
+                                                );
                                             }
                                         }
                                     }
@@ -599,11 +596,8 @@ impl GitControl for GitStore {
 
             let mut checkout = git2::build::CheckoutBuilder::new();
             checkout.force();
-            repo.checkout_tree(
-                fetch_tree.as_object(),
-                Some(&mut checkout),
-            )
-            .map_err(|e| StoreError::Other(format!("checkout failed: {e}")))?;
+            repo.checkout_tree(fetch_tree.as_object(), Some(&mut checkout))
+                .map_err(|e| StoreError::Other(format!("checkout failed: {e}")))?;
 
             repo.reference(&branch_ref_name, fetch_commit.id(), true, "pull")
                 .map_err(|e| StoreError::Other(format!("failed to create branch ref: {e}")))?;
@@ -646,11 +640,8 @@ impl GitControl for GitStore {
 
         let mut checkout = git2::build::CheckoutBuilder::new();
         checkout.force();
-        repo.checkout_tree(
-            tree.as_object(),
-            Some(&mut checkout),
-        )
-        .map_err(|e| StoreError::Other(format!("checkout failed: {e}")))?;
+        repo.checkout_tree(tree.as_object(), Some(&mut checkout))
+            .map_err(|e| StoreError::Other(format!("checkout failed: {e}")))?;
 
         repo.set_head(&branch_ref)
             .map_err(|e| StoreError::Other(format!("failed to set head: {e}")))?;
@@ -720,7 +711,11 @@ fn walk_tree(
     Ok(())
 }
 
-fn collect_md_files(dir: &Path, root: &Path, files: &mut Vec<String>) -> Result<(), std::io::Error> {
+fn collect_md_files(
+    dir: &Path,
+    root: &Path,
+    files: &mut Vec<String>,
+) -> Result<(), std::io::Error> {
     if !dir.is_dir() {
         return Ok(());
     }

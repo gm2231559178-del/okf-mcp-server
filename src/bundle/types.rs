@@ -136,11 +136,17 @@ impl std::fmt::Display for ValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ValidationError::EmptyType => write!(f, "frontmatter type is empty"),
-            ValidationError::MissingFrontmatter => write!(f, "missing or unparseable YAML frontmatter"),
+            ValidationError::MissingFrontmatter => {
+                write!(f, "missing or unparseable YAML frontmatter")
+            }
             ValidationError::MalformedYaml(e) => write!(f, "malformed YAML frontmatter: {e}"),
-            ValidationError::ReservedFilename(name) => write!(f, "concept ID uses reserved filename: {name}"),
+            ValidationError::ReservedFilename(name) => {
+                write!(f, "concept ID uses reserved filename: {name}")
+            }
             ValidationError::PathTraversal(p) => write!(f, "path traversal detected: {p}"),
-            ValidationError::OkfVersionOnNonRoot(p) => write!(f, "okf_version present in non-root index.md: {p}"),
+            ValidationError::OkfVersionOnNonRoot(p) => {
+                write!(f, "okf_version present in non-root index.md: {p}")
+            }
             ValidationError::IoError(e) => write!(f, "I/O error: {e}"),
         }
     }
@@ -159,12 +165,18 @@ pub enum ValidationWarning {
 impl std::fmt::Display for ValidationWarning {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ValidationWarning::MissingField(field) => write!(f, "missing recommended frontmatter field: {field}"),
+            ValidationWarning::MissingField(field) => {
+                write!(f, "missing recommended frontmatter field: {field}")
+            }
             ValidationWarning::UnknownType(t) => write!(f, "unknown type value: {t}"),
-            ValidationWarning::UnknownExtraKeys(keys) => write!(f, "unrecognized frontmatter keys: {}", keys.join(", ")),
+            ValidationWarning::UnknownExtraKeys(keys) => {
+                write!(f, "unrecognized frontmatter keys: {}", keys.join(", "))
+            }
             ValidationWarning::BrokenLink(l) => write!(f, "broken link: {l}"),
             ValidationWarning::MissingIndexMd(d) => write!(f, "missing index.md in directory: {d}"),
-            ValidationWarning::InvalidLogFormat(d) => write!(f, "log.md entry not under valid date heading: {d}"),
+            ValidationWarning::InvalidLogFormat(d) => {
+                write!(f, "log.md entry not under valid date heading: {d}")
+            }
         }
     }
 }

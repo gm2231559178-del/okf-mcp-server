@@ -84,6 +84,12 @@ impl AuditLog {
         params_summary: &str,
         error: &str,
     ) -> Result<(), std::io::Error> {
-        self.record(tool, bundle, target_path, params_summary, &format!("error: {error}"))
+        self.record(
+            tool,
+            bundle,
+            target_path,
+            params_summary,
+            &format!("error: {error}"),
+        )
     }
 }

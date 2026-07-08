@@ -31,7 +31,8 @@ fn test_write_and_read_concept() {
         body: "# Orders\n\nThis is the orders table.\n\n# Schema\n\n| column | type |\n|--------|------|\n| id | INT64 |\n".to_string(),
     };
 
-    repo.write_concept(concept.clone(), WriteMode::Create).unwrap();
+    repo.write_concept(concept.clone(), WriteMode::Create)
+        .unwrap();
 
     let read = repo.read_concept(&ConceptId::new("tables/orders")).unwrap();
     assert_eq!(read.id.to_string(), "tables/orders");
@@ -89,7 +90,8 @@ fn test_delete_concept() {
     repo.write_concept(concept, WriteMode::Create).unwrap();
     assert_eq!(repo.list_concepts(None, None, None).unwrap().len(), 1);
 
-    repo.delete_concept(&ConceptId::new("tables/orders")).unwrap();
+    repo.delete_concept(&ConceptId::new("tables/orders"))
+        .unwrap();
     assert_eq!(repo.list_concepts(None, None, None).unwrap().len(), 0);
 }
 
@@ -114,7 +116,12 @@ fn test_validate_bundle() {
     repo.write_concept(concept, WriteMode::Create).unwrap();
 
     let result = repo.validate().unwrap();
-    assert_eq!(result.errors.len(), 0, "expected no errors, got: {:?}", result.errors);
+    assert_eq!(
+        result.errors.len(),
+        0,
+        "expected no errors, got: {:?}",
+        result.errors
+    );
 }
 
 #[test]
@@ -122,10 +129,16 @@ fn test_validate_missing_type() {
     let (_dir, repo) = setup_test_bundle("test");
 
     let store = repo.store();
-    store.write_raw("bad.md", "---\ntype: \n---\n\nBody").unwrap();
+    store
+        .write_raw("bad.md", "---\ntype: \n---\n\nBody")
+        .unwrap();
 
     let result = repo.validate().unwrap();
-    assert!(result.errors.iter().any(|e| e.contains("empty type")), "expected empty type error, got: {:?}", result.errors);
+    assert!(
+        result.errors.iter().any(|e| e.contains("empty type")),
+        "expected empty type error, got: {:?}",
+        result.errors
+    );
 }
 
 #[test]
@@ -148,7 +161,11 @@ fn test_read_index_synthesized_root() {
     repo.write_concept(concept, WriteMode::Create).unwrap();
 
     let result = repo.read_index("").unwrap();
-    assert!(result.rendered.contains("Orders"), "root index should contain root-level concept: {}", result.rendered);
+    assert!(
+        result.rendered.contains("Orders"),
+        "root index should contain root-level concept: {}",
+        result.rendered
+    );
     assert!(result.sections.is_some());
 }
 
@@ -173,11 +190,19 @@ fn test_read_index_synthesized_subdirectory() {
 
     // Root index should show subdirectory "tables"
     let root_result = repo.read_index("").unwrap();
-    assert!(root_result.rendered.contains("tables"), "root index should contain subdirectory: {}", root_result.rendered);
+    assert!(
+        root_result.rendered.contains("tables"),
+        "root index should contain subdirectory: {}",
+        root_result.rendered
+    );
 
     // Subdirectory index should show the concept
     let sub_result = repo.read_index("tables").unwrap();
-    assert!(sub_result.rendered.contains("Orders"), "tables index should contain concept: {}", sub_result.rendered);
+    assert!(
+        sub_result.rendered.contains("Orders"),
+        "tables index should contain concept: {}",
+        sub_result.rendered
+    );
 }
 
 #[test]
@@ -242,7 +267,10 @@ fn test_frontmatter_round_trip_extra_keys() {
 
     let read = repo.read_concept(&ConceptId::new("extra_test")).unwrap();
     assert_eq!(
-        read.frontmatter.extra.get("custom_key").and_then(|v| v.as_str()),
+        read.frontmatter
+            .extra
+            .get("custom_key")
+            .and_then(|v| v.as_str()),
         Some("custom_value")
     );
     assert!(read.frontmatter.extra.contains_key("nested"));
@@ -302,7 +330,9 @@ fn test_citation_add() {
         title: "Reference Doc".to_string(),
         target: "https://example.com/doc".to_string(),
     };
-    let updated = repo.add_citation(&ConceptId::new("citable"), &citation).unwrap();
+    let updated = repo
+        .add_citation(&ConceptId::new("citable"), &citation)
+        .unwrap();
     assert!(updated.contains("# Citations"));
     assert!(updated.contains("[1]"));
     assert!(updated.contains("Reference Doc"));
@@ -312,7 +342,9 @@ fn test_citation_add() {
         title: "Another Ref".to_string(),
         target: "https://example.com/ref2".to_string(),
     };
-    let updated2 = repo.add_citation(&ConceptId::new("citable"), &citation2).unwrap();
+    let updated2 = repo
+        .add_citation(&ConceptId::new("citable"), &citation2)
+        .unwrap();
     assert!(updated2.contains("[2]"));
     assert!(updated2.contains("Another Ref"));
 }

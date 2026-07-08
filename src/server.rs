@@ -2,11 +2,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use rmcp::{
-    model::*,
-    schemars,
-    service::RequestContext,
-    ErrorData, RoleServer, ServerHandler, ServiceExt,
-    transport,
+    model::*, schemars, service::RequestContext, transport, ErrorData, RoleServer, ServerHandler,
+    ServiceExt,
 };
 use serde::Deserialize;
 
@@ -207,7 +204,10 @@ impl Clone for OkfServer {
 }
 
 impl OkfServer {
-    pub fn new(bundles: Vec<ResolvedBundleConfig>, audit_dir: Option<&str>) -> Result<Self, String> {
+    pub fn new(
+        bundles: Vec<ResolvedBundleConfig>,
+        audit_dir: Option<&str>,
+    ) -> Result<Self, String> {
         let mut bundle_repos: HashMap<String, Arc<BundleRepo>> = HashMap::new();
         let mut git_controls: HashMap<String, Arc<dyn GitControl>> = HashMap::new();
         let mut bundle_configs: HashMap<String, ResolvedBundleConfig> = HashMap::new();
@@ -228,21 +228,20 @@ impl OkfServer {
                     .map_err(|e| format!("failed to create bundle directory {root:?}: {e}"))?;
             }
 
-            let (store, git): (Arc<dyn BundleStore>, Option<Arc<dyn GitControl>>) = match config.backend {
-                BundleBackend::Fs => {
-                    (Arc::new(LocalFsStore::new(root.clone())), None)
-                }
-                BundleBackend::Git => {
-                    let ssh_key = config.auth.as_ref().and_then(|a| a.ssh_key.clone());
-                    let token_env = config.auth.as_ref().and_then(|a| a.token_env.clone());
-                    let gs = Arc::new(
-                        GitStore::new(root.clone(), ssh_key, token_env)
-                            .map_err(|e| format!("failed to create GitStore: {e}"))?
-                    );
-                    let git_control: Arc<dyn GitControl> = gs.clone();
-                    (gs as Arc<dyn BundleStore>, Some(git_control))
-                }
-            };
+            let (store, git): (Arc<dyn BundleStore>, Option<Arc<dyn GitControl>>) =
+                match config.backend {
+                    BundleBackend::Fs => (Arc::new(LocalFsStore::new(root.clone())), None),
+                    BundleBackend::Git => {
+                        let ssh_key = config.auth.as_ref().and_then(|a| a.ssh_key.clone());
+                        let token_env = config.auth.as_ref().and_then(|a| a.token_env.clone());
+                        let gs = Arc::new(
+                            GitStore::new(root.clone(), ssh_key, token_env)
+                                .map_err(|e| format!("failed to create GitStore: {e}"))?,
+                        );
+                        let git_control: Arc<dyn GitControl> = gs.clone();
+                        (gs as Arc<dyn BundleStore>, Some(git_control))
+                    }
+                };
 
             let repo = Arc::new(BundleRepo::new(name.clone(), store, root));
             bundle_repos.insert(name.clone(), repo);
@@ -265,9 +264,21 @@ impl OkfServer {
         let audit = first_audit;
         let tools = Self::build_tool_list();
 
+        let allowlists: HashMap<String, Option<Vec<String>>> = bundles
+            .iter()
+            .map(|c| (c.name.clone(), c.write_allowlist.clone()))
+            .collect();
+
         Ok(Self {
-            read_tools: Arc::new(crate::tools::read::ReadTools::new(bundle_repos.clone(), audit.clone())),
-            write_tools: Arc::new(crate::tools::write::WriteTools::new(bundle_repos, audit)),
+            read_tools: Arc::new(crate::tools::read::ReadTools::new(
+                bundle_repos.clone(),
+                audit.clone(),
+            )),
+            write_tools: Arc::new(crate::tools::write::WriteTools::new(
+                bundle_repos,
+                audit,
+                allowlists,
+            )),
             tools,
             git_controls,
             bundle_configs,
@@ -290,26 +301,102 @@ impl OkfServer {
 
     fn build_tool_list() -> Vec<Tool> {
         vec![
-            make_tool("okf_list_bundles", "List all registered bundles", Self::tool_schema::<BundleArg>()),
-            make_tool("okf_list_concepts", "List concepts in a bundle, optionally filtered by prefix, type, or tag", Self::tool_schema::<ListConceptsArgs>()),
-            make_tool("okf_read_concept", "Read a concept by its ID", Self::tool_schema::<ReadConceptArgs>()),
-            make_tool("okf_read_index", "Read or synthesize an index.md for a directory", Self::tool_schema::<ReadIndexArgs>()),
-            make_tool("okf_search", "Search concepts in a bundle by query text", Self::tool_schema::<SearchArgs>()),
-            make_tool("okf_get_backlinks", "Get concepts that link to a given concept", Self::tool_schema::<BacklinksArgs>()),
-            make_tool("okf_get_graph", "Get the full link graph for a bundle or subdirectory", Self::tool_schema::<GraphArgs>()),
-            make_tool("okf_validate_bundle", "Validate a bundle against OKF conformance rules", Self::tool_schema::<BundleArg>()),
-            make_tool("okf_write_concept", "Write a concept to a bundle", Self::tool_schema::<WriteConceptArgs>()),
-            make_tool("okf_delete_concept", "Delete a concept from a bundle", Self::tool_schema::<DeleteConceptArgs>()),
-            make_tool("okf_write_index", "Write or update an index.md for a directory", Self::tool_schema::<WriteIndexArgs>()),
-            make_tool("okf_append_log", "Append entries to a log.md file", Self::tool_schema::<AppendLogArgs>()),
-            make_tool("okf_add_citation", "Add a citation to a concept's # Citations section", Self::tool_schema::<AddCitationArgs>()),
+            make_tool(
+                "okf_list_bundles",
+                "List all registered bundles",
+                Self::tool_schema::<BundleArg>(),
+            ),
+            make_tool(
+                "okf_list_concepts",
+                "List concepts in a bundle, optionally filtered by prefix, type, or tag",
+                Self::tool_schema::<ListConceptsArgs>(),
+            ),
+            make_tool(
+                "okf_read_concept",
+                "Read a concept by its ID",
+                Self::tool_schema::<ReadConceptArgs>(),
+            ),
+            make_tool(
+                "okf_read_index",
+                "Read or synthesize an index.md for a directory",
+                Self::tool_schema::<ReadIndexArgs>(),
+            ),
+            make_tool(
+                "okf_search",
+                "Search concepts in a bundle by query text",
+                Self::tool_schema::<SearchArgs>(),
+            ),
+            make_tool(
+                "okf_get_backlinks",
+                "Get concepts that link to a given concept",
+                Self::tool_schema::<BacklinksArgs>(),
+            ),
+            make_tool(
+                "okf_get_graph",
+                "Get the full link graph for a bundle or subdirectory",
+                Self::tool_schema::<GraphArgs>(),
+            ),
+            make_tool(
+                "okf_validate_bundle",
+                "Validate a bundle against OKF conformance rules",
+                Self::tool_schema::<BundleArg>(),
+            ),
+            make_tool(
+                "okf_write_concept",
+                "Write a concept to a bundle",
+                Self::tool_schema::<WriteConceptArgs>(),
+            ),
+            make_tool(
+                "okf_delete_concept",
+                "Delete a concept from a bundle",
+                Self::tool_schema::<DeleteConceptArgs>(),
+            ),
+            make_tool(
+                "okf_write_index",
+                "Write or update an index.md for a directory",
+                Self::tool_schema::<WriteIndexArgs>(),
+            ),
+            make_tool(
+                "okf_append_log",
+                "Append entries to a log.md file",
+                Self::tool_schema::<AppendLogArgs>(),
+            ),
+            make_tool(
+                "okf_add_citation",
+                "Add a citation to a concept's # Citations section",
+                Self::tool_schema::<AddCitationArgs>(),
+            ),
             // Git tools
-            make_tool("okf_git_status", "Show git status (staged, unstaged, untracked files)", Self::tool_schema::<GitStatusArgs>()),
-            make_tool("okf_git_diff", "Show git diff for staged/unstaged changes", Self::tool_schema::<GitDiffArgs>()),
-            make_tool("okf_git_commit", "Commit currently staged changes", Self::tool_schema::<GitCommitArgs>()),
-            make_tool("okf_git_push", "Push to a remote repository", Self::tool_schema::<GitPushArgs>()),
-            make_tool("okf_git_pull", "Pull and merge from a remote repository", Self::tool_schema::<GitPullArgs>()),
-            make_tool("okf_git_create_branch", "Create and switch to a new branch", Self::tool_schema::<GitCreateBranchArgs>()),
+            make_tool(
+                "okf_git_status",
+                "Show git status (staged, unstaged, untracked files)",
+                Self::tool_schema::<GitStatusArgs>(),
+            ),
+            make_tool(
+                "okf_git_diff",
+                "Show git diff for staged/unstaged changes",
+                Self::tool_schema::<GitDiffArgs>(),
+            ),
+            make_tool(
+                "okf_git_commit",
+                "Commit currently staged changes",
+                Self::tool_schema::<GitCommitArgs>(),
+            ),
+            make_tool(
+                "okf_git_push",
+                "Push to a remote repository",
+                Self::tool_schema::<GitPushArgs>(),
+            ),
+            make_tool(
+                "okf_git_pull",
+                "Pull and merge from a remote repository",
+                Self::tool_schema::<GitPullArgs>(),
+            ),
+            make_tool(
+                "okf_git_create_branch",
+                "Create and switch to a new branch",
+                Self::tool_schema::<GitCreateBranchArgs>(),
+            ),
         ]
     }
 
@@ -323,7 +410,9 @@ impl OkfServer {
         ErrorData::internal_error(msg.into(), None::<serde_json::Value>)
     }
 
-    fn parse_args<T: serde::de::DeserializeOwned>(args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<T, ErrorData> {
+    fn parse_args<T: serde::de::DeserializeOwned>(
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<T, ErrorData> {
         serde_json::from_value(serde_json::Value::Object(args.unwrap_or_default()))
             .map_err(|e| ErrorData::invalid_params(e.to_string(), None::<serde_json::Value>))
     }
@@ -341,7 +430,10 @@ impl OkfServer {
     // Called before any write operation on a git-backed bundle.
     fn ensure_session_branch(&self, bundle: &str) -> Result<(), ErrorData> {
         let config = self.bundle_configs.get(bundle).ok_or_else(|| {
-            ErrorData::invalid_params(format!("bundle not found: {bundle}"), None::<serde_json::Value>)
+            ErrorData::invalid_params(
+                format!("bundle not found: {bundle}"),
+                None::<serde_json::Value>,
+            )
         })?;
 
         if config.backend != BundleBackend::Git {
@@ -393,8 +485,7 @@ impl ServerHandler for OkfServer {
                 .build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
-                "OKF MCP Server — read, search, and write OKF knowledge bundles."
-                    .to_string(),
+                "OKF MCP Server — read, search, and write OKF knowledge bundles.".to_string(),
             ),
         }
     }
@@ -491,9 +582,9 @@ impl ServerHandler for OkfServer {
         _context: RequestContext<RoleServer>,
     ) -> Result<ReadResourceResult, ErrorData> {
         let uri = request.uri.as_str().to_string();
-        let uri = uri
-            .strip_prefix("okf://")
-            .ok_or_else(|| ErrorData::invalid_params("invalid URI scheme", None::<serde_json::Value>))?;
+        let uri = uri.strip_prefix("okf://").ok_or_else(|| {
+            ErrorData::invalid_params("invalid URI scheme", None::<serde_json::Value>)
+        })?;
 
         if uri.contains('{') {
             return Ok(ReadResourceResult {
@@ -504,9 +595,9 @@ impl ServerHandler for OkfServer {
             });
         }
 
-        let slash_pos = uri
-            .find('/')
-            .ok_or_else(|| ErrorData::invalid_params(format!("invalid URI: {uri}"), None::<serde_json::Value>))?;
+        let slash_pos = uri.find('/').ok_or_else(|| {
+            ErrorData::invalid_params(format!("invalid URI: {uri}"), None::<serde_json::Value>)
+        })?;
         let bundle_name = &uri[..slash_pos];
         let remaining = &uri[slash_pos + 1..];
 
@@ -517,7 +608,10 @@ impl ServerHandler for OkfServer {
                 .read_index(bundle_name, dir_path)
                 .map_err(|e| ErrorData::internal_error(e, None::<serde_json::Value>))?;
             Ok(ReadResourceResult {
-                contents: vec![ResourceContents::text(result.rendered, request.uri.as_str())],
+                contents: vec![ResourceContents::text(
+                    result.rendered,
+                    request.uri.as_str(),
+                )],
             })
         } else {
             let concept = self
@@ -555,52 +649,84 @@ impl OkfServer {
         Self::text(&info)
     }
 
-    fn call_list_concepts(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_list_concepts(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: ListConceptsArgs = Self::parse_args(args)?;
         self.read_tools
-            .list_concepts(&a.bundle, a.prefix.as_deref(), a.r#type.as_deref(), a.tag.as_deref())
+            .list_concepts(
+                &a.bundle,
+                a.prefix.as_deref(),
+                a.r#type.as_deref(),
+                a.tag.as_deref(),
+            )
             .map_err(Self::err)
             .and_then(Self::text)
     }
 
-    fn call_read_concept(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_read_concept(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: ReadConceptArgs = Self::parse_args(args)?;
-        self.read_tools.read_concept(&a.bundle, &a.concept_id)
+        self.read_tools
+            .read_concept(&a.bundle, &a.concept_id)
             .map_err(Self::err)
             .and_then(Self::text)
     }
 
-    fn call_read_index(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_read_index(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: ReadIndexArgs = Self::parse_args(args)?;
-        self.read_tools.read_index(&a.bundle, &a.path)
+        self.read_tools
+            .read_index(&a.bundle, &a.path)
             .map_err(Self::err)
             .and_then(Self::text)
     }
 
-    fn call_search(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_search(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: SearchArgs = Self::parse_args(args)?;
-        self.read_tools.search(&a.bundle, &a.query, a.r#type.as_deref(), a.tag.as_deref())
+        self.read_tools
+            .search(&a.bundle, &a.query, a.r#type.as_deref(), a.tag.as_deref())
             .map_err(Self::err)
             .and_then(Self::text)
     }
 
-    fn call_get_backlinks(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_get_backlinks(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: BacklinksArgs = Self::parse_args(args)?;
-        self.read_tools.get_backlinks(&a.bundle, &a.concept_id)
+        self.read_tools
+            .get_backlinks(&a.bundle, &a.concept_id)
             .map_err(Self::err)
             .and_then(Self::text)
     }
 
-    fn call_get_graph(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_get_graph(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: GraphArgs = Self::parse_args(args)?;
-        self.read_tools.get_graph(&a.bundle, a.prefix.as_deref())
+        self.read_tools
+            .get_graph(&a.bundle, a.prefix.as_deref())
             .map_err(Self::err)
             .and_then(Self::text)
     }
 
-    fn call_validate_bundle(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_validate_bundle(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: BundleArg = Self::parse_args(args)?;
-        self.read_tools.validate_bundle(&a.bundle)
+        self.read_tools
+            .validate_bundle(&a.bundle)
             .map_err(Self::err)
             .and_then(Self::text)
     }
@@ -611,7 +737,10 @@ impl OkfServer {
 // ---------------------------------------------------------------------------
 
 impl OkfServer {
-    fn call_write_concept(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_write_concept(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: WriteConceptArgs = Self::parse_args(args)?;
         self.ensure_session_branch(&a.bundle)?;
         let fm = Frontmatter {
@@ -624,52 +753,83 @@ impl OkfServer {
             extra: serde_yaml::Mapping::new(),
         };
         let mode = a.mode.as_deref().unwrap_or("upsert");
-        self.write_tools.write_concept(&a.bundle, &a.concept_id, fm, a.body, mode)
+        self.write_tools
+            .write_concept(&a.bundle, &a.concept_id, fm, a.body, mode)
             .map_err(Self::err)
             .and_then(Self::text)
     }
 
-    fn call_delete_concept(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_delete_concept(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: DeleteConceptArgs = Self::parse_args(args)?;
         self.ensure_session_branch(&a.bundle)?;
-        self.write_tools.delete_concept(&a.bundle, &a.concept_id)
+        self.write_tools
+            .delete_concept(&a.bundle, &a.concept_id)
             .map_err(Self::err)
             .and_then(|deleted| Self::text(serde_json::json!({ "deleted": deleted })))
     }
 
-    fn call_write_index(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_write_index(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: WriteIndexArgs = Self::parse_args(args)?;
         self.ensure_session_branch(&a.bundle)?;
-        let sections: Vec<IndexSection> = a.sections.into_iter().map(|s| IndexSection {
-            heading: s.heading,
-            entries: s.entries.into_iter().map(|e| IndexEntry {
-                title: e.title,
-                path: e.path,
-                description: e.description,
-            }).collect(),
-        }).collect();
-        self.write_tools.write_index(&a.bundle, &a.path, sections, a.okf_version)
+        let sections: Vec<IndexSection> = a
+            .sections
+            .into_iter()
+            .map(|s| IndexSection {
+                heading: s.heading,
+                entries: s
+                    .entries
+                    .into_iter()
+                    .map(|e| IndexEntry {
+                        title: e.title,
+                        path: e.path,
+                        description: e.description,
+                    })
+                    .collect(),
+            })
+            .collect();
+        self.write_tools
+            .write_index(&a.bundle, &a.path, sections, a.okf_version)
             .map_err(Self::err)
             .and_then(|rendered| Self::text(serde_json::json!({ "rendered": rendered })))
     }
 
-    fn call_append_log(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_append_log(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: AppendLogArgs = Self::parse_args(args)?;
         self.ensure_session_branch(&a.bundle)?;
-        let date = a.date.unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%d").to_string());
-        let entries: Vec<LogEntry> = a.entries.into_iter().map(|e| LogEntry {
-            label: e.label,
-            text: e.text,
-        }).collect();
-        self.write_tools.append_log(&a.bundle, &a.path, &date, entries)
+        let date = a
+            .date
+            .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%d").to_string());
+        let entries: Vec<LogEntry> = a
+            .entries
+            .into_iter()
+            .map(|e| LogEntry {
+                label: e.label,
+                text: e.text,
+            })
+            .collect();
+        self.write_tools
+            .append_log(&a.bundle, &a.path, &date, entries)
             .map_err(Self::err)
             .and_then(|updated| Self::text(serde_json::json!({ "updated": updated })))
     }
 
-    fn call_add_citation(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_add_citation(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: AddCitationArgs = Self::parse_args(args)?;
         self.ensure_session_branch(&a.bundle)?;
-        self.write_tools.add_citation(&a.bundle, &a.concept_id, &a.title, &a.target)
+        self.write_tools
+            .add_citation(&a.bundle, &a.concept_id, &a.title, &a.target)
             .map_err(Self::err)
             .and_then(|updated| Self::text(serde_json::json!({ "updated": updated })))
     }
@@ -680,44 +840,70 @@ impl OkfServer {
 // ---------------------------------------------------------------------------
 
 impl OkfServer {
-    fn call_git_status(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_git_status(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: GitStatusArgs = Self::parse_args(args)?;
         let git = self.get_git_control(&a.bundle)?.clone();
-        git.status().map_err(|e| Self::err(e.to_string())).and_then(Self::text)
+        git.status()
+            .map_err(|e| Self::err(e.to_string()))
+            .and_then(Self::text)
     }
 
-    fn call_git_diff(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_git_diff(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: GitDiffArgs = Self::parse_args(args)?;
         let git = self.get_git_control(&a.bundle)?.clone();
-        git.diff(a.path.as_deref()).map_err(|e| Self::err(e.to_string())).and_then(Self::text)
+        git.diff(a.path.as_deref())
+            .map_err(|e| Self::err(e.to_string()))
+            .and_then(Self::text)
     }
 
-    fn call_git_commit(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_git_commit(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: GitCommitArgs = Self::parse_args(args)?;
         let git = self.get_git_control(&a.bundle)?.clone();
-        git.commit(&a.message, a.author.as_deref()).map_err(|e| Self::err(e.to_string())).and_then(|sha| {
-            Self::text(serde_json::json!({ "sha": sha }))
-        })
+        git.commit(&a.message, a.author.as_deref())
+            .map_err(|e| Self::err(e.to_string()))
+            .and_then(|sha| Self::text(serde_json::json!({ "sha": sha })))
     }
 
-    fn call_git_push(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_git_push(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: GitPushArgs = Self::parse_args(args)?;
         let git = self.get_git_control(&a.bundle)?.clone();
-        git.push(a.remote.as_deref(), a.branch.as_deref()).map_err(|e| Self::err(e.to_string())).and_then(Self::text)
+        git.push(a.remote.as_deref(), a.branch.as_deref())
+            .map_err(|e| Self::err(e.to_string()))
+            .and_then(Self::text)
     }
 
-    fn call_git_pull(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_git_pull(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: GitPullArgs = Self::parse_args(args)?;
         let git = self.get_git_control(&a.bundle)?.clone();
-        git.pull(a.remote.as_deref(), a.branch.as_deref()).map_err(|e| Self::err(e.to_string())).and_then(Self::text)
+        git.pull(a.remote.as_deref(), a.branch.as_deref())
+            .map_err(|e| Self::err(e.to_string()))
+            .and_then(Self::text)
     }
 
-    fn call_git_create_branch(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, ErrorData> {
+    fn call_git_create_branch(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, ErrorData> {
         let a: GitCreateBranchArgs = Self::parse_args(args)?;
         let git = self.get_git_control(&a.bundle)?.clone();
-        git.create_branch(&a.name, a.from.as_deref()).map_err(|e| Self::err(e.to_string())).and_then(|name| {
-            Self::text(serde_json::json!({ "branch": name }))
-        })
+        git.create_branch(&a.name, a.from.as_deref())
+            .map_err(|e| Self::err(e.to_string()))
+            .and_then(|name| Self::text(serde_json::json!({ "branch": name })))
     }
 }
 
@@ -725,7 +911,11 @@ impl OkfServer {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn make_tool(name: &'static str, description: &'static str, input_schema: serde_json::Map<String, serde_json::Value>) -> Tool {
+fn make_tool(
+    name: &'static str,
+    description: &'static str,
+    input_schema: serde_json::Map<String, serde_json::Value>,
+) -> Tool {
     Tool {
         name: name.into(),
         title: None,
